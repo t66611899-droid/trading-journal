@@ -6,6 +6,7 @@ import { Field, Icon } from './components/ui'
 import { clearDemo, hasDemo, setFilters, setState, useStore, defaultFilters } from './lib/store'
 import type { Filters, Trade } from './lib/types'
 import { cls } from './lib/format'
+import { cloudEnabled, useCloud } from './lib/cloud'
 import Dashboard from './pages/Dashboard'
 import CalendarPage from './pages/CalendarPage'
 import Trades from './pages/Trades'
@@ -95,6 +96,7 @@ export default function App() {
   const [day, setDay] = useState<string | null>(null)
   const theme = useStore((s) => s.settings.theme)
   const demo = useStore(hasDemo)
+  const cloud = useCloud()
   const nav = useMemo<Nav>(() => ({
     page, day,
     go: (p) => { setDay(null); setPage(p) },
@@ -120,6 +122,7 @@ export default function App() {
           {NAV.map(item)}
           <div className="nav-sep" />
           {NAV2.map(item)}
+          {cloudEnabled && <button className="nav-item" onClick={() => nav.go('settings')}><Icon name="link" />{cloud.user ? (cloud.status === 'syncing' ? 'Syncing…' : cloud.status === 'error' ? 'Sync problem' : 'Synced') : 'Sign in to sync'}</button>}
           <button className="nav-item" onClick={toggleTheme}><Icon name={theme === 'dark' ? 'sun' : 'moon'} />{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button>
         </aside>
         <div className="main">

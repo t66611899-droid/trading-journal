@@ -3,6 +3,7 @@ import { Card, Field, Icon, Seg } from '../components/ui'
 import { clearDemo, hasDemo, loadDemo, setState, useStore, wipeAll } from '../lib/store'
 import type { Account, Settings } from '../lib/types'
 import { money, uid } from '../lib/format'
+import AccountCard from '../components/AccountCard'
 import { contractsTraded, setFeeRate } from '../lib/fees'
 import { rootSymbol } from '../lib/instruments'
 
@@ -24,6 +25,7 @@ export default function SettingsPage() {
   }
   return (
     <>
+      <AccountCard />
       <Card title="Trading accounts" right={<button className="btn sm" onClick={() => setState((s) => ({ accounts: [...s.accounts, { id: uid(), name: `Account ${s.accounts.length + 1}`, broker: '', startBalance: 0 }] }))}><Icon name="plus" size={14} />Add account</button>}>
         <div className="col" style={{ gap: 14 }}>
           {accounts.map((a) => (

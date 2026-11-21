@@ -30,10 +30,37 @@ function persist() {
 }
 
 export const getState = () => state
+// Cloud sync plugs in here without the store depending on it.
+export const hooks: {
+  changed?: () => void
+  imagePut?: (id: string, data: string) => void
+  imageDel?: (id: string) => void
+  imageGet?: (id: string) => Promise<string | null>
+} = {}
+/** Everything that is saved (and synced): the state without the per-session filters. */
+export function snapshot(): Omit<AppState, 'filters'> {
+  const { filters, ...rest } = state
+  return rest
+}
+/** Replace the journal with data that came from the cloud, without marking it as a local change. */
+export function replaceFromCloud(data: Partial<AppState>) {
+  set(KEY + '-before-sync', snapshot()).catch(() => {}) // safety copy of what this device had
+  state = { ...emptyState(), ...data, settings: { ...emptyState().settings, ...data.settings }, filters: state.filters }
+  document.documentElement.dataset.theme = state.settings.theme
+  listeners.forEach((l) => l())
+  persist()
+}
+export async function allImages(): Promise<Record<string, string>> {
+  const out: Record<string, string> = {}
+  for (const k of await keys()) if (typeof k === 'string' && k.startsWith(IMG)) out[k.slice(IMG.length)] = await get(k)
+  return out
+}
+
 export function setState(patch: Partial<AppState> | ((s: AppState) => Partial<AppState>)) {
   state = { ...state, ...(typeof patch === 'function' ? patch(state) : patch) }
   listeners.forEach((l) => l())
   persist()
+  hooks.changed?.()
 }
 export function useStore<T>(sel: (s: AppState) => T): T {
   return useSyncExternalStore(
@@ -144,14 +171,19 @@ export async function saveImage(file: Blob): Promise<string> {
   const out = c.toDataURL('image/jpeg', 0.88)
   const id = Math.random().toString(36).slice(2) + Date.now().toString(36)
   await set(IMG + id, out)
+  hooks.imagePut?.(id, out)
   return id
 }
-export const removeImage = (id: string) => del(IMG + id)
+export const removeImage = (id: string) => { hooks.imageDel?.(id); return del(IMG + id) }
 export function useImage(id: string): string | null {
   const [src, setSrc] = useState<string | null>(null)
   useEffect(() => {
     let live = true
-    get(IMG + id).then((v) => live && setSrc(v ?? null))
+    get(IMG + id).then(async (v) => {
+      // Not on this device yet: fetch it from the cloud once and keep a local copy.
+      if (!v && hooks.imageGet) { v = await hooks.imageGet(id); if (v) set(IMG + id, v) }
+      if (live) setSrc(v ?? null)
+    })
     return () => { live = false }
   }, [id])
   return src

@@ -129,6 +129,8 @@ export function disconnectSync() {
 /** The link to open on another device. It always points at the public site, even when this page is a local copy. */
 export const syncLink = () => (cs.key ? `${/^(localhost$|127\.|\[?::1\]?$)/.test(location.hostname) ? SITE_URL : location.origin + location.pathname}#k=${cs.key}` : '')
 
+export const currentSyncKey = () => cs.key
+
 export function initCloud() {
   if (!cloudEnabled) return
   // Opened through a sync link: adopt the key and take it out of the address bar straight away.

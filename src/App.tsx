@@ -17,11 +17,12 @@ import Playbooks from './pages/Playbooks'
 import ImportPage from './pages/ImportPage'
 import SettingsPage from './pages/SettingsPage'
 import Market from './pages/Market'
+import Coach from './pages/Coach'
 import TradeEditor from './pages/TradeEditor'
 
 const NAV: [Page, string, string][] = [
   ['dashboard', 'Dashboard', 'dashboard'], ['journal', 'Daily Journal', 'book'], ['trades', 'Trades', 'list'], ['calendar', 'Calendar', 'calendar'],
-  ['reports', 'Reports', 'chart'], ['playbooks', 'Playbooks', 'target'], ['forecast', 'Forecast', 'future'], ['market', 'Markets', 'globe'],
+  ['reports', 'Reports', 'chart'], ['playbooks', 'Playbooks', 'target'], ['coach', 'AI Coach', 'spark'], ['forecast', 'Forecast', 'future'], ['market', 'Markets', 'globe'],
 ]
 const NAV2: [Page, string, string][] = [['import', 'Import & Sync', 'upload'], ['settings', 'Settings', 'settings']]
 const TITLES = Object.fromEntries([...NAV, ...NAV2].map(([p, l]) => [p, l])) as Record<Page, string>
@@ -108,11 +109,11 @@ export default function App() {
     document.documentElement.dataset.theme = t
     setState((s) => ({ settings: { ...s.settings, theme: t } }))
   }
-  const P = { dashboard: Dashboard, calendar: CalendarPage, trades: Trades, journal: Journal, reports: Reports, forecast: ForecastPage, playbooks: Playbooks, market: Market, import: ImportPage, settings: SettingsPage }[page]
+  const P = { dashboard: Dashboard, calendar: CalendarPage, trades: Trades, journal: Journal, reports: Reports, forecast: ForecastPage, coach: Coach, playbooks: Playbooks, market: Market, import: ImportPage, settings: SettingsPage }[page]
   const item = ([p, label, icon]: [Page, string, string]) => (
     <button key={p} className={cls('nav-item', page === p && 'active')} onClick={() => nav.go(p)}><Icon name={icon} />{label}</button>
   )
-  const filtered = !['import', 'settings', 'market', 'playbooks'].includes(page)
+  const filtered = !['import', 'settings', 'market', 'playbooks', 'coach'].includes(page)
   return (
     <NavCtx.Provider value={nav}>
       <div className="app">

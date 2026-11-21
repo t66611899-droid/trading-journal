@@ -80,7 +80,11 @@ function Review({ parsed, setParsed, fileName, onDone }: { parsed: Parsed; setPa
         </>
       )}
       <div className="row wrap" style={{ marginTop: 16 }}>
-        <button className="btn primary" disabled={!fresh.length} onClick={() => { setState((s) => ({ trades: [...s.trades, ...fresh] })); onDone(fresh.length) }}>Import {fresh.length} trades</button>
+        <button className="btn primary" disabled={!fresh.length} onClick={() => {
+          // Real trades replace the sample data rather than mixing with it.
+          setState((s) => ({ trades: [...s.trades.filter((t) => !t.demo), ...fresh], playbooks: s.playbooks.filter((p) => !p.id.startsWith('demo-')) }))
+          onDone(fresh.length)
+        }}>Import {fresh.length} trades</button>
         {accounts.length > 1 && <select className="input" style={{ width: 190 }} value={accountId} onChange={(e) => setAccountId(e.target.value)}>{accounts.map((a) => <option key={a.id} value={a.id}>Into: {a.name}</option>)}</select>}
         <div className="grow" />
         <button className="btn ghost sm" onClick={() => setAdvanced(!advanced)}>{advanced ? 'Hide column settings' : 'Adjust columns'}</button>

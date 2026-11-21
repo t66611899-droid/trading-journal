@@ -22,7 +22,7 @@ import TradeEditor from './pages/TradeEditor'
 
 const NAV: [Page, string, string][] = [
   ['dashboard', 'Dashboard', 'dashboard'], ['journal', 'Daily Journal', 'book'], ['trades', 'Trades', 'list'], ['calendar', 'Calendar', 'calendar'],
-  ['reports', 'Reports', 'chart'], ['playbooks', 'Playbooks', 'target'], ['coach', 'AI Coach', 'spark'], ['forecast', 'Forecast', 'future'], ['market', 'Markets', 'globe'],
+  ['reports', 'Reports', 'chart'], ['playbooks', 'Playbooks', 'target'], ['coach', 'Coach', 'spark'], ['forecast', 'Forecast', 'future'], ['market', 'Markets', 'globe'],
 ]
 const NAV2: [Page, string, string][] = [['import', 'Import & Sync', 'upload'], ['settings', 'Settings', 'settings']]
 const TITLES = Object.fromEntries([...NAV, ...NAV2].map(([p, l]) => [p, l])) as Record<Page, string>

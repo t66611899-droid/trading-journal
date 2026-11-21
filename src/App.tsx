@@ -85,6 +85,12 @@ export default function App() {
   })
   // Keep the current screen in the URL so a refresh returns to it.
   const setPage = (p: Page) => { history.replaceState(null, '', '#' + p); setPageState(p) }
+  // Follow links and back/forward navigation that only change the #page part of the address.
+  useEffect(() => {
+    const h = () => { const p = location.hash.slice(1) as Page; if (p in TITLES) setPageState(p) }
+    window.addEventListener('hashchange', h)
+    return () => window.removeEventListener('hashchange', h)
+  }, [])
   const [editing, setEditing] = useState<{ id: string | 'new'; defaults?: Partial<Trade> } | null>(null)
   const [day, setDay] = useState<string | null>(null)
   const theme = useStore((s) => s.settings.theme)

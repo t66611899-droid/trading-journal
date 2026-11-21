@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { get, set, del, keys } from 'idb-keyval'
 import type { AppState, Filters, Trade } from './types'
 import { makeDemo } from './demo'
+import { withFeeRates } from './fees'
 
 const KEY = 'tj-state-v1'
 const IMG = 'tj-img:'
@@ -13,7 +14,8 @@ const emptyState = (): AppState => ({
   trades: [],
   playbooks: [],
   dayNotes: {},
-  settings: { currency: 'USD', theme: 'light', breakeven: 0, dayFirst: true },
+  // MNQ: $0.50 per contract per side is this account's all-in Tradovate cost (derived from the real balance).
+  settings: { currency: 'USD', theme: 'light', breakeven: 0, dayFirst: true, feeRates: { MNQ: 0.5 } },
   filters: defaultFilters(),
 })
 
@@ -46,6 +48,7 @@ export function snapshot(): Omit<AppState, 'filters'> {
 export function replaceFromCloud(data: Partial<AppState>) {
   set(KEY + '-before-sync', snapshot()).catch(() => {}) // safety copy of what this device had
   state = { ...emptyState(), ...data, settings: { ...emptyState().settings, ...data.settings }, filters: state.filters }
+  state = { ...state, trades: withFeeRates(state.trades, state.settings.feeRates || {}) }
   document.documentElement.dataset.theme = state.settings.theme
   listeners.forEach((l) => l())
   persist()
@@ -75,6 +78,8 @@ export async function initStore() {
   else state = { ...emptyState(), ...makeDemo() }
   // One-time switch to the light, English layout for journals saved before the redesign.
   if (!(state.settings as any).uiV2) state = { ...state, settings: { ...state.settings, theme: 'light', uiV2: true } as any, accounts: state.accounts.map((a) => (a.name === 'חשבון ראשי' ? { ...a, name: 'Main account' } : a)), ...(state.trades.length && state.trades.every((t) => t.demo) ? makeDemo() : {}) }
+  // Trades saved without fees pick up the commission rates.
+  state = { ...state, trades: withFeeRates(state.trades.filter((t) => !t.demo), state.settings.feeRates || {}).concat(state.trades.filter((t) => t.demo)) }
   if (saved) persist()
   document.documentElement.dataset.theme = state.settings.theme
 }

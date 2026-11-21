@@ -46,7 +46,8 @@ export function mergeDocs(local: Doc, remote: Doc): Doc {
   const seen = new Set<string>()
   return {
     accounts: byId(local.accounts, remote.accounts),
-    trades: byId(local.trades.filter((t) => !t.demo), remote.trades).filter((t) => { const k = tradeKey(t); if (seen.has(k)) return false; seen.add(k); return true }),
+    // Cloud trades go first so that, for the same trade imported on two devices, the cloud copy is the one kept.
+    trades: [...remote.trades, ...local.trades.filter((t) => !t.demo && !remote.trades.some((r) => r.id === t.id))].filter((t) => { const k = tradeKey(t); if (seen.has(k)) return false; seen.add(k); return true }),
     playbooks: byId(local.playbooks.filter((p) => !p.id.startsWith('demo-')), remote.playbooks),
     dayNotes: { ...local.dayNotes, ...remote.dayNotes },
     settings: { ...local.settings, ...remote.settings },

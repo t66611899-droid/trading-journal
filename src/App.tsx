@@ -122,7 +122,7 @@ export default function App() {
           {NAV.map(item)}
           <div className="nav-sep" />
           {NAV2.map(item)}
-          {cloudEnabled && <button className="nav-item" onClick={() => nav.go('settings')}><Icon name="link" />{cloud.user ? (cloud.status === 'syncing' ? 'Syncing…' : cloud.status === 'error' ? 'Sync problem' : 'Synced') : 'Sign in to sync'}</button>}
+          {cloudEnabled && <button className="nav-item" onClick={() => nav.go('settings')}><Icon name="link" />{cloud.key ? (cloud.status === 'syncing' ? 'Syncing…' : cloud.status === 'error' ? 'Sync problem' : 'Synced') : 'Sync devices'}</button>}
           <button className="nav-item" onClick={toggleTheme}><Icon name={theme === 'dark' ? 'sun' : 'moon'} />{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button>
         </aside>
         <div className="main">

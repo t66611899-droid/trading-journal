@@ -17,7 +17,7 @@ const FUT: Record<string, { mult: number; tv: string }> = {
 
 /** "NQZ6" / "MNQH2026" / "ESZ25" -> "NQ" / "MNQ" / "ES". Non-futures are returned unchanged. */
 export function rootSymbol(symbol: string): string {
-  const s = symbol.toUpperCase().trim().replace(/^\//, '')
+  const s = (symbol || '').toUpperCase().trim().replace(/^\//, '')
   const m = s.match(/^([A-Z0-9]{1,4}?)[FGHJKMNQUVXZ]\d{1,4}$/)
   if (m && FUT[m[1]]) return m[1]
   return s

@@ -1,26 +1,36 @@
-// Cloud account + sync (Supabase). The whole journal is one document per user; devices pull it when
-// they open or regain focus and push after every change. Screenshots sync one row per image.
+// Cross-device sync by secret link. The journal is stored in the cloud under a long random key that
+// only this user's devices hold: whoever has the link can open the journal, so it is never shown
+// anywhere except in Settings. Devices pull when they open or regain focus and push after each change.
 import { useSyncExternalStore } from 'react'
-import { createClient, type User } from '@supabase/supabase-js'
-import { allImages, getState, hooks, replaceFromCloud, snapshot } from './store'
+import { allImages, hooks, replaceFromCloud, snapshot } from './store'
 import type { AppState } from './types'
 import { tradeKey } from './importers'
-import { SUPABASE_KEY, SUPABASE_URL } from './cloudConfig'
+import { SITE_URL, SUPABASE_KEY, SUPABASE_URL } from './cloudConfig'
 
 export const cloudEnabled = !!SUPABASE_URL && !!SUPABASE_KEY
-const sb = cloudEnabled ? createClient(SUPABASE_URL, SUPABASE_KEY) : null
 
-export interface CloudState { user: User | null; status: 'off' | 'syncing' | 'synced' | 'error'; error?: string; lastSync?: number }
-let cs: CloudState = { user: null, status: 'off' }
+async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(args),
+  })
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `Sync failed (${res.status})`)
+  return res.status === 204 ? (null as T) : res.json()
+}
+
+export interface CloudState { key: string | null; status: 'off' | 'syncing' | 'synced' | 'error'; error?: string; lastSync?: number }
+// What this device last saw in the cloud, and whether it has changes that were not pushed yet.
+interface Meta { key?: string; remoteAt?: string; dirty?: boolean }
+const META = 'tj-sync'
+const meta = (): Meta => { try { return JSON.parse(localStorage.getItem(META) || '{}') } catch { return {} } }
+const setMeta = (m: Meta) => localStorage.setItem(META, JSON.stringify(m))
+const patchMeta = (m: Partial<Meta>) => setMeta({ ...meta(), ...m })
+
+let cs: CloudState = { key: null, status: 'off' }
 const listeners = new Set<() => void>()
 const setCs = (p: Partial<CloudState>) => { cs = { ...cs, ...p }; listeners.forEach((l) => l()) }
 export const useCloud = () => useSyncExternalStore((l) => (listeners.add(l), () => listeners.delete(l)), () => cs)
-
-// What this device last saw in the cloud, and whether it has changes that were not pushed yet.
-interface Meta { userId?: string; remoteAt?: string; dirty?: boolean }
-const META = 'tj-cloud'
-const meta = (): Meta => { try { return JSON.parse(localStorage.getItem(META) || '{}') } catch { return {} } }
-const setMeta = (m: Partial<Meta>) => localStorage.setItem(META, JSON.stringify({ ...meta(), ...m }))
 
 type Doc = Omit<AppState, 'filters'>
 /** What gets uploaded: the journal without the sample data. */
@@ -33,11 +43,10 @@ const hasRealData = (d: Doc) => d.trades.some((t) => !t.demo) || Object.keys(d.d
 /** Two devices changed the journal independently: keep everything from both; the cloud copy wins on the same item. */
 export function mergeDocs(local: Doc, remote: Doc): Doc {
   const byId = <T extends { id: string }>(a: T[], b: T[]) => [...new Map([...a, ...b].map((x) => [x.id, x])).values()]
-  const trades = byId(local.trades.filter((t) => !t.demo), remote.trades)
   const seen = new Set<string>()
   return {
     accounts: byId(local.accounts, remote.accounts),
-    trades: trades.filter((t) => { const k = tradeKey(t); if (seen.has(k)) return false; seen.add(k); return true }),
+    trades: byId(local.trades.filter((t) => !t.demo), remote.trades).filter((t) => { const k = tradeKey(t); if (seen.has(k)) return false; seen.add(k); return true }),
     playbooks: byId(local.playbooks.filter((p) => !p.id.startsWith('demo-')), remote.playbooks),
     dayNotes: { ...local.dayNotes, ...remote.dayNotes },
     settings: { ...local.settings, ...remote.settings },
@@ -46,47 +55,40 @@ export function mergeDocs(local: Doc, remote: Doc): Doc {
 
 let busy = false, again = false, pushTimer: any, pollTimer: any
 
-async function push(): Promise<void> {
-  const user = cs.user
-  if (!sb || !user) return
-  const m = meta()
-  const row = { user_id: user.id, data: cloudDoc(), updated_at: new Date().toISOString() }
-  let res
-  if (m.userId === user.id && m.remoteAt) {
-    // Only overwrite the version this device last saw; if another device wrote in between, merge instead.
-    res = await sb.from('journals').update(row).eq('user_id', user.id).eq('updated_at', m.remoteAt).select('updated_at')
-    if (!res.error && res.data.length === 0) return pull(true)
-  } else {
-    res = await sb.from('journals').upsert(row).select('updated_at')
-  }
-  if (res.error) throw res.error
-  setMeta({ userId: user.id, remoteAt: res.data[0].updated_at, dirty: false })
+async function uploadAllImages(key: string) {
+  for (const [id, data] of Object.entries(await allImages())) await rpc('sj_img_put', { p_key: key, p_id: id, p_data: data })
 }
 
-async function pull(conflict = false): Promise<void> {
-  const user = cs.user
-  if (!sb || !user) return
-  const { data, error } = await sb.from('journals').select('data, updated_at').eq('user_id', user.id).maybeSingle()
-  if (error) throw error
+async function push(key: string): Promise<void> {
   const m = meta()
-  const mine = m.userId === user.id
-  if (!data) { setMeta({ userId: user.id, remoteAt: undefined }); await uploadAllImages(); return push() }
-  if (mine && data.updated_at === m.remoteAt && !conflict) { if (m.dirty) await push(); return }
+  const version = await rpc<string | null>('sj_put', { p_key: key, p_data: cloudDoc(), p_expected: m.remoteAt ?? null })
+  if (!version) return pull(key, true) // another device wrote in between: merge, then push again
+  patchMeta({ remoteAt: version, dirty: false })
+}
+
+async function pull(key: string, conflict = false): Promise<void> {
+  const rows = await rpc<{ data: Doc; updated_at: string }[]>('sj_get', { p_key: key })
+  const remote = rows[0]
+  const m = meta()
+  if (!remote) { patchMeta({ remoteAt: undefined }); await push(key); return uploadAllImages(key) }
+  if (remote.updated_at === m.remoteAt && !conflict) { if (m.dirty) await push(key); return }
   const local = snapshot()
-  const takeRemote = (mine && !m.dirty && !conflict) || !hasRealData(local)
-  replaceFromCloud(takeRemote ? data.data : mergeDocs(local, data.data))
-  setMeta({ userId: user.id, remoteAt: data.updated_at, dirty: !takeRemote })
-  if (!takeRemote) { await uploadAllImages(); await push() }
+  // Take the cloud copy as-is unless this device has work of its own that the cloud has not seen.
+  const takeRemote = (!!m.remoteAt && !m.dirty && !conflict) || !hasRealData(local)
+  replaceFromCloud(takeRemote ? remote.data : mergeDocs(local, remote.data))
+  patchMeta({ remoteAt: remote.updated_at, dirty: !takeRemote })
+  if (!takeRemote) { await push(key); await uploadAllImages(key) }
 }
 
 /** Run one sync pass; calls made while one is running are folded into a single follow-up pass. */
 export async function syncNow(): Promise<void> {
-  if (!cs.user) return
+  const key = cs.key
+  if (!key) return
   if (busy) { again = true; return }
   busy = true
   setCs({ status: 'syncing', error: undefined })
   try {
-    do { again = false; await pull() } while (again)
+    do { again = false; await pull(key) } while (again && cs.key === key)
     setCs({ status: 'synced', lastSync: Date.now() })
   } catch (e: any) {
     setCs({ status: 'error', error: e?.message || String(e) })
@@ -94,46 +96,52 @@ export async function syncNow(): Promise<void> {
   busy = false
 }
 
-async function uploadAllImages() {
-  const user = cs.user
-  if (!sb || !user) return
-  for (const [id, data] of Object.entries(await allImages())) await sb.from('journal_images').upsert({ user_id: user.id, id, data })
-}
-
-function start(user: User) {
-  if (cs.user?.id === user.id) return
-  setCs({ user })
-  hooks.changed = () => { setMeta({ dirty: true }); clearTimeout(pushTimer); pushTimer = setTimeout(syncNow, 1200) }
-  hooks.imagePut = (id, data) => { sb!.from('journal_images').upsert({ user_id: user.id, id, data }).then(() => {}) }
-  hooks.imageDel = (id) => { sb!.from('journal_images').delete().eq('user_id', user.id).eq('id', id).then(() => {}) }
-  hooks.imageGet = async (id) => (await sb!.from('journal_images').select('data').eq('user_id', user.id).eq('id', id).maybeSingle()).data?.data ?? null
+function start(key: string) {
+  if (meta().key !== key) setMeta({ key }) // a different journal than this device was linked to: forget the old version marker
+  setCs({ key, status: 'syncing', error: undefined })
+  hooks.changed = () => { patchMeta({ dirty: true }); clearTimeout(pushTimer); pushTimer = setTimeout(syncNow, 1200) }
+  hooks.imagePut = (id, data) => { rpc('sj_img_put', { p_key: key, p_id: id, p_data: data }).catch(() => {}) }
+  hooks.imageDel = (id) => { rpc('sj_img_del', { p_key: key, p_id: id }).catch(() => {}) }
+  hooks.imageGet = (id) => rpc<string | null>('sj_img_get', { p_key: key, p_id: id }).catch(() => null)
   syncNow()
   clearInterval(pollTimer)
-  pollTimer = setInterval(() => document.visibilityState === 'visible' && syncNow(), 30000)
+  pollTimer = setInterval(() => document.visibilityState === 'visible' && syncNow(), 20000)
 }
-function stop() {
+
+/** Turn sync on for this device with a brand-new secret key. */
+export function enableSync() {
+  const bytes = crypto.getRandomValues(new Uint8Array(32))
+  start(btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''))
+}
+const keyFrom = (text: string) => text.trim().match(/(?:#k=|^)([A-Za-z0-9_-]{40,200})$/)?.[1] ?? null
+/** Link this device using a sync link (or bare key) copied from another device. */
+export function connectWithLink(text: string): boolean {
+  const key = keyFrom(text)
+  if (key) start(key)
+  return !!key
+}
+export function disconnectSync() {
   clearInterval(pollTimer); clearTimeout(pushTimer)
   hooks.changed = hooks.imagePut = hooks.imageDel = hooks.imageGet = undefined
-  setCs({ user: null, status: 'off', error: undefined })
+  localStorage.removeItem(META)
+  setCs({ key: null, status: 'off', error: undefined })
 }
+/** The link to open on another device. It always points at the public site, even when this page is a local copy. */
+export const syncLink = () => (cs.key ? `${/^(localhost$|127\.|\[?::1\]?$)/.test(location.hostname) ? SITE_URL : location.origin + location.pathname}#k=${cs.key}` : '')
 
 export function initCloud() {
-  if (!sb) return
-  sb.auth.onAuthStateChange((_e, session) => (session?.user ? start(session.user) : stop()))
+  if (!cloudEnabled) return
+  // Opened through a sync link: adopt the key and take it out of the address bar straight away.
+  const fromUrl = keyFrom(location.hash)
+  if (fromUrl) history.replaceState(null, '', location.pathname + location.search + '#dashboard')
+  const key = fromUrl ?? meta().key
+  if (key) start(key)
+  // A sync link opened while the journal is already open in this tab.
+  window.addEventListener('hashchange', () => {
+    const k = keyFrom(location.hash)
+    if (!k) return
+    history.replaceState(null, '', location.pathname + location.search + '#dashboard')
+    if (k !== cs.key) start(k)
+  })
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && syncNow())
 }
-
-const friendly = (msg: string) =>
-  /invalid login/i.test(msg) ? 'Wrong email or password.' : /not confirmed/i.test(msg) ? 'Confirm your email first — check your inbox for the link.' : /already registered/i.test(msg) ? 'This email already has an account. Sign in instead.' : msg
-
-/** Returns a message to show the user, or null when signed in. */
-export async function signIn(email: string, password: string): Promise<string | null> {
-  const { error } = await sb!.auth.signInWithPassword({ email: email.trim(), password })
-  return error ? friendly(error.message) : null
-}
-export async function signUp(email: string, password: string): Promise<string | null> {
-  const { data, error } = await sb!.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: location.origin + location.pathname } })
-  if (error) return friendly(error.message)
-  return data.session ? null : 'Account created. Open the confirmation link we emailed you, then sign in here.'
-}
-export const signOut = () => sb!.auth.signOut()

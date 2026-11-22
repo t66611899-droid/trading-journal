@@ -83,13 +83,32 @@ export function PnlBars({ data, height = 220, labelFmt = (s: string) => s, money
 
 export const groupBars = (groups: Group[]) => groups.map((g) => ({ label: g.label, value: g.net, count: g.count, winRate: g.winRate }))
 
-export function ScoreRadar({ parts, height = 230 }: { parts: { name: string; value: number }[]; height?: number }) {
+const scoreColor = (v: number) => (v >= 66 ? 'var(--pos)' : v >= 33 ? 'var(--warn)' : 'var(--neg)')
+
+/** Small card shown when hovering a point of the score radar. */
+function ScoreTip({ active, payload }: any) {
+  if (!active || !payload?.length) return null
+  const p = payload[0].payload
+  return (
+    <div className="tip" style={{ width: 230 }}>
+      <div className="row between"><b>{p.name}</b><b className="num" style={{ color: scoreColor(p.value) }}>{Math.round(p.value)}<span className="faint" style={{ fontWeight: 500 }}> / 100</span></b></div>
+      <div className="progress" style={{ margin: '8px 0', height: 5 }}><div style={{ width: `${p.value}%`, background: scoreColor(p.value) }} /></div>
+      {p.raw && <div className="row between" style={{ fontSize: 12 }}><span className="muted">Your value</span><span className="num">{p.raw}</span></div>}
+      {p.how && <div className="muted" style={{ fontSize: 11.5, marginTop: 6, lineHeight: 1.45 }}>{p.how}</div>}
+    </div>
+  )
+}
+
+export function ScoreRadar({ parts, height = 230 }: { parts: { name: string; value: number; raw?: string; how?: string }[]; height?: number }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
       <RadarChart data={parts} outerRadius="72%">
         <PolarGrid stroke="var(--line2)" />
         <PolarAngleAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--muted)' }} />
-        <Radar dataKey="value" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.3} strokeWidth={2} />
+        <Tooltip content={<ScoreTip />} cursor={false} />
+        <Radar dataKey="value" stroke="var(--accent)" fill="var(--accent)" fillOpacity={0.25} strokeWidth={2}
+          dot={{ r: 3.5, fill: 'var(--panel)', stroke: 'var(--accent)', strokeWidth: 2, fillOpacity: 1 }}
+          activeDot={{ r: 6, fill: 'var(--accent)', stroke: 'var(--panel)', strokeWidth: 2 }} />
       </RadarChart>
     </ResponsiveContainer>
   )

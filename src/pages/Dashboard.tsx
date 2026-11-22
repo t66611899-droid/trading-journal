@@ -1,14 +1,11 @@
 import React, { useMemo, useState } from 'react'
-import { Card, Icon, Modal, Money } from '../components/ui'
+import { Card, Icon, Money } from '../components/ui'
 import { EquityChart, PnlBars, ScoreRadar } from '../components/charts'
 import MonthCalendar from '../components/MonthCalendar'
 import { useFilteredTrades, useStartBalance, useStore } from '../lib/store'
-import { computeStats, dailyStats, net, outcome, type Stats } from '../lib/stats'
-import { cls, dateLong, dateTime, dayKey, dayKeyOf, MONTHS, money, num, pct, shortDate } from '../lib/format'
-import type { Trade } from '../lib/types'
+import { computeStats, dailyStats, net } from '../lib/stats'
+import { cls, dayKey, dayKeyOf, MONTHS, money, num, pct, shortDate } from '../lib/format'
 import { useNav } from '../nav'
-
-type Detail = 'net' | 'win' | 'pf' | 'day' | 'payoff' | 'score'
 
 /** Half-donut: green share = wins, red share = losses. */
 function Gauge({ wins, losses }: { wins: number; losses: number }) {
@@ -33,117 +30,30 @@ function Ring({ share }: { share: number }) {
     </svg>
   )
 }
-const Tile = ({ label, value, tone, right, children, onClick }: { label: string; value: React.ReactNode; tone?: number; right?: React.ReactNode; children?: React.ReactNode; onClick: () => void }) => (
-  <div className="card tile" onClick={onClick} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onClick()}>
-    <div className="row between">
-      <div>
-        <div className="stat-label">{label}</div>
-        <div className={cls('stat-value num', tone !== undefined && (tone > 0 ? 'pos' : tone < 0 ? 'neg' : ''))}>{value}</div>
+
+const row = (label: string, value: React.ReactNode) => <div className="kv"><span>{label}</span><span className="num">{value}</span></div>
+
+/** A stat tile. Hovering (or tapping) it reveals a small card with what the number is made of. */
+function Tile({ label, value, tone, right, children, about, details, alignRight }: {
+  label: string; value: React.ReactNode; tone?: number; right?: React.ReactNode; children?: React.ReactNode
+  about: string; details: React.ReactNode; alignRight?: boolean
+}) {
+  return (
+    <div className="card tile" tabIndex={0}>
+      <div className="row between">
+        <div>
+          <div className="stat-label">{label}</div>
+          <div className={cls('stat-value num', tone !== undefined && (tone > 0 ? 'pos' : tone < 0 ? 'neg' : ''))}>{value}</div>
+        </div>
+        {right}
       </div>
-      {right}
+      {children}
+      <div className={cls('hover-card', alignRight && 'right')}>
+        <div className="hc-title">{label}</div>
+        <div className="hc-sub">{about}</div>
+        {details}
+      </div>
     </div>
-    {children}
-    <span className="more">Details →</span>
-  </div>
-)
-
-const kv = (label: string, value: React.ReactNode) => <div className="kv"><span>{label}</span><span className="num">{value}</span></div>
-const explain = (text: string) => <p className="muted" style={{ margin: '0 0 14px' }}>{text}</p>
-
-function TradeList({ trades, onOpen }: { trades: Trade[]; onOpen: (id: string) => void }) {
-  if (!trades.length) return <div className="muted">None</div>
-  return (
-    <div className="table-wrap" style={{ border: '1px solid var(--line)', borderRadius: 10, maxHeight: 300, overflowY: 'auto' }}>
-      <table className="t">
-        <thead><tr><th>Opened</th><th>Symbol</th><th>Side</th><th className="r">Gross</th><th className="r">Fees</th><th className="r">Net P&L</th></tr></thead>
-        <tbody>
-          {trades.map((t) => (
-            <tr key={t.id} className="click" onClick={() => onOpen(t.id)}>
-              <td className="num">{dateTime(t.entryTime)}</td><td><b>{t.symbol}</b></td><td>{t.side === 'long' ? 'Long' : 'Short'}</td>
-              <td className="r"><Money v={t.pnl} plain /></td><td className="r num">{money(t.fees)}</td><td className="r"><b><Money v={net(t)} /></b></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-/** What is behind each dashboard number: the formula, the inputs, and the trades or days it is built from. */
-function DetailModal({ kind, s, trades, onClose }: { kind: Detail; s: Stats; trades: Trade[]; onClose: () => void }) {
-  const nav = useNav()
-  const open = (id: string) => { onClose(); nav.openTrade(id) }
-  const recent = [...trades].reverse()
-  const wins = recent.filter((t) => outcome(t) === 'win'), losses = recent.filter((t) => outcome(t) === 'loss')
-  const titles: Record<Detail, string> = { net: 'Net P&L', win: 'Trade win %', pf: 'Profit factor', day: 'Day win %', payoff: 'Avg win/loss trade', score: 'Journal score' }
-  const section = (t: string) => <div className="section-title" style={{ margin: '16px 0 8px' }}>{t}</div>
-  let body: React.ReactNode
-  if (kind === 'net') body = <>
-    {explain('What you actually kept: the gross result of every trade minus commissions and fees.')}
-    {kv('Gross P&L', <Money v={s.gross} />)}{kv('Commissions & fees', <Money v={-s.fees} plain />)}{kv('Net P&L', <b><Money v={s.net} /></b>)}
-    {kv('Trades', s.count)}{kv('Average per trade', <Money v={s.expectancy} />)}
-    {section('All trades')}<TradeList trades={recent} onOpen={open} />
-  </>
-  else if (kind === 'win') body = <>
-    {explain('Winning trades as a share of all trades that ended in a win or a loss (after fees).')}
-    {kv('Winning trades', s.wins)}{kv('Losing trades', s.losses)}{kv('Breakeven trades', s.be)}{kv('Win rate', `${s.wins} ÷ ${s.wins + s.losses} = ${pct(s.winRate)}`)}
-    {section(`Winners (${wins.length})`)}<TradeList trades={wins} onOpen={open} />
-    {section(`Losers (${losses.length})`)}<TradeList trades={losses} onOpen={open} />
-  </>
-  else if (kind === 'pf') body = <>
-    {explain('How many dollars you win for every dollar you lose. Above 1.0 you are profitable; 1.5 is solid and 2.0 or more is strong.')}
-    {kv('Total won (all winning trades)', <Money v={s.grossProfit} />)}{kv('Total lost (all losing trades)', <Money v={-s.grossLoss} />)}
-    {kv('Profit factor', `${money(s.grossProfit)} ÷ ${money(s.grossLoss)} = ${num(s.profitFactor)}`)}
-    {section(`Winners (${wins.length})`)}<TradeList trades={wins} onOpen={open} />
-    {section(`Losers (${losses.length})`)}<TradeList trades={losses} onOpen={open} />
-  </>
-  else if (kind === 'day') body = <>
-    {explain('Trading days that ended green as a share of all trading days.')}
-    {kv('Winning days', s.winDays)}{kv('Losing days', s.lossDays)}{kv('Day win rate', `${s.winDays} ÷ ${s.tradingDays} = ${pct(s.dayWinRate)}`)}
-    {kv('Average winning day', <Money v={s.avgWinDay} />)}{kv('Average losing day', <Money v={s.avgLossDay} />)}
-    {section('All trading days')}
-    <div className="table-wrap" style={{ border: '1px solid var(--line)', borderRadius: 10 }}>
-      <table className="t">
-        <thead><tr><th>Day</th><th className="r">Trades</th><th className="r">Won / lost</th><th className="r">Net P&L</th></tr></thead>
-        <tbody>{[...s.days].reverse().map((d) => (
-          <tr key={d.date} className="click" onClick={() => { onClose(); nav.openDay(d.date) }}>
-            <td>{dateLong(d.date)}</td><td className="r num">{d.count}</td><td className="r num">{d.wins} / {d.losses}</td><td className="r"><b><Money v={d.net} /></b></td>
-          </tr>))}</tbody>
-      </table>
-    </div>
-  </>
-  else if (kind === 'payoff') body = <>
-    {explain('The size of your average winner compared with your average loser. The higher it is, the lower the win rate you need to make money.')}
-    {kv('Average winning trade', <Money v={s.avgWin} />)}{kv('Average losing trade', <Money v={-s.avgLoss} />)}
-    {kv('Ratio', `${money(s.avgWin)} ÷ ${money(s.avgLoss)} = ${num(s.payoff)}`)}
-    {kv('Win rate needed to break even', isFinite(s.payoff) && s.payoff > 0 ? pct(100 / (1 + s.payoff)) : '—')}{kv('Your win rate', pct(s.winRate))}
-    {kv('Largest win', <Money v={s.largestWin} />)}{kv('Largest loss', <Money v={s.largestLoss} />)}
-  </>
-  else body = <>
-    {explain('One number from 0 to 100 that sums up six sides of your trading. Each part is scored 0–100 and weighted; the weights add up to 100%.')}
-    <div className="table-wrap" style={{ border: '1px solid var(--line)', borderRadius: 10 }}>
-      <table className="t">
-        <thead><tr><th>Part</th><th>Your value</th><th style={{ width: 150 }}>Score</th><th className="r">Weight</th><th className="r">Points</th></tr></thead>
-        <tbody>
-          {s.score.parts.map((p) => (
-            <tr key={p.name}>
-              <td style={{ whiteSpace: 'normal' }}><b>{p.name}</b><div className="muted" style={{ fontSize: 12 }}>{p.how}</div></td>
-              <td className="num">{p.raw}</td>
-              <td><div className="row" style={{ gap: 8 }}><div className="bar-cell grow"><div style={{ width: `${p.value}%`, background: p.value >= 66 ? 'var(--pos)' : p.value >= 33 ? 'var(--warn)' : 'var(--neg)' }} /></div><span className="num">{Math.round(p.value)}</span></div></td>
-              <td className="r num">{Math.round(p.weight * 100)}%</td>
-              <td className="r num"><b>{(p.value * p.weight).toFixed(1)}</b></td>
-            </tr>
-          ))}
-          <tr><td colSpan={4}><b>Journal score</b></td><td className="r num"><b style={{ fontSize: 16 }}>{Math.round(s.score.total)}</b></td></tr>
-        </tbody>
-      </table>
-    </div>
-    {s.count < 20 && <p className="faint" style={{ marginTop: 12 }}>With only {s.count} trades the score moves a lot from one trade to the next. It settles as the journal grows.</p>}
-  </>
-  return (
-    <Modal title={titles[kind]} onClose={onClose} wide={kind === 'score'} footer={<><button className="btn primary" onClick={() => { onClose(); nav.go('reports') }}>Open full reports</button><button className="btn" onClick={onClose}>Close</button></>}>
-      {body}
-    </Modal>
   )
 }
 
@@ -155,7 +65,6 @@ export default function Dashboard() {
   const allTrades = useStore((s) => s.trades)
   const nav = useNav()
   const s = useMemo(() => computeStats(trades, start), [trades, start])
-  const [detail, setDetail] = useState<Detail | null>(null)
   const [cur, setCur] = useState(() => { const d = new Date(); return { y: d.getFullYear(), m: d.getMonth() } })
   const monthDays = s.days.filter((d) => d.date.startsWith(`${cur.y}-${String(cur.m + 1).padStart(2, '0')}`))
   const monthNet = monthDays.reduce((a, d) => a + d.net, 0)
@@ -180,33 +89,52 @@ export default function Dashboard() {
   return (
     <>
       <div className="grid g5">
-        <Tile label="Net P&L" value={money(s.net)} tone={s.net} onClick={() => setDetail('net')}><div className="stat-sub">{s.count} trades · fees {money(s.fees, 0)}</div></Tile>
-        <Tile label="Trade win %" value={pct(s.winRate)} right={<Gauge wins={s.wins} losses={s.losses} />} onClick={() => setDetail('win')} />
-        <Tile label="Profit factor" value={num(s.profitFactor)} right={<Ring share={s.grossProfit / (s.grossProfit + s.grossLoss || 1)} />} onClick={() => setDetail('pf')} />
-        <Tile label="Day win %" value={pct(s.dayWinRate)} right={<Gauge wins={s.winDays} losses={s.lossDays} />} onClick={() => setDetail('day')} />
-        <Tile label="Avg win/loss trade" value={num(s.payoff)} onClick={() => setDetail('payoff')}>
+        <Tile label="Net P&L" value={money(s.net)} tone={s.net} about="What you kept after commissions and fees."
+          details={<>{row('Gross P&L', <Money v={s.gross} />)}{row('Fees', <Money v={-s.fees} plain />)}{row('Net P&L', <b><Money v={s.net} /></b>)}{row('Average per trade', <Money v={s.expectancy} />)}</>}>
+          <div className="stat-sub">{s.count} trades</div>
+        </Tile>
+        <Tile label="Trade win %" value={pct(s.winRate)} right={<Gauge wins={s.wins} losses={s.losses} />} about="Winning trades out of all trades that ended in a win or a loss."
+          details={<>{row('Winners', <span className="pos">{s.wins}</span>)}{row('Losers', <span className="neg">{s.losses}</span>)}{s.be > 0 && row('Breakeven', s.be)}{row('Win rate', `${s.wins} of ${s.wins + s.losses}`)}</>} />
+        <Tile label="Profit factor" value={num(s.profitFactor)} right={<Ring share={s.grossProfit / (s.grossProfit + s.grossLoss || 1)} />} about="Dollars won for every dollar lost. Above 1.0 is profitable; 2.0 or more is strong."
+          details={<>{row('Total won', <Money v={s.grossProfit} />)}{row('Total lost', <Money v={-s.grossLoss} />)}{row('Won ÷ lost', <b>{num(s.profitFactor)}</b>)}</>} />
+        <Tile alignRight label="Day win %" value={pct(s.dayWinRate)} right={<Gauge wins={s.winDays} losses={s.lossDays} />} about="Trading days that ended green."
+          details={<>{row('Winning days', <span className="pos">{s.winDays}</span>)}{row('Losing days', <span className="neg">{s.lossDays}</span>)}{row('Avg winning day', <Money v={s.avgWinDay} />)}{row('Avg losing day', <Money v={s.avgLossDay} />)}</>} />
+        <Tile alignRight label="Avg win/loss trade" value={num(s.payoff)} about="Your average winner compared with your average loser."
+          details={<>{row('Average winner', <Money v={s.avgWin} />)}{row('Average loser', <Money v={-s.avgLoss} />)}{row('Win rate needed to break even', isFinite(s.payoff) && s.payoff > 0 ? pct(100 / (1 + s.payoff)) : '—')}{row('Your win rate', pct(s.winRate))}</>}>
           <div className="progress" style={{ marginTop: 10, background: 'var(--neg)' }}><div style={{ width: `${(s.avgWin / (s.avgWin + s.avgLoss || 1)) * 100}%`, background: 'var(--pos)', borderRadius: 0 }} /></div>
           <div className="row between num" style={{ fontSize: 12, fontWeight: 600, marginTop: 4 }}><span className="pos">{money(s.avgWin, 0)}</span><span className="neg">-{money(s.avgLoss, 0)}</span></div>
         </Tile>
       </div>
 
       <div className="grid g3">
-        <Card className="tile" title="Journal score" right={<button className="btn ghost sm" onClick={() => setDetail('score')}>See breakdown</button>}>
-          <div onClick={() => setDetail('score')}>
-            <ScoreRadar parts={s.score.parts} height={210} />
-            <div className="row" style={{ gap: 14, marginTop: 6 }}>
-              <div><div className="stat-label">Your score</div><b className="num" style={{ fontSize: 22 }}>{Math.round(s.score.total)}</b></div>
-              <div className="grow">
-                <div className="progress" style={{ background: 'linear-gradient(90deg, var(--neg), var(--warn), var(--pos))', position: 'relative', overflow: 'visible' }}>
-                  <span style={{ position: 'absolute', left: `calc(${s.score.total}% - 6px)`, top: -3, width: 12, height: 12, borderRadius: '50%', background: 'var(--panel)', border: '3px solid var(--text)' }} />
+        <Card title={<span className="row" style={{ gap: 8 }}>Journal score
+          <span className="hover-host"><span className="info-dot">i</span>
+            <span className="hover-card" style={{ width: 290, fontWeight: 400 }}>
+              <div className="hc-title">How the score is built</div>
+              <div className="hc-sub">Six parts, each scored 0–100. Hover a point on the chart to see one part.</div>
+              {s.score.parts.map((p) => (
+                <div key={p.name} className="row" style={{ gap: 8, padding: '4px 0' }}>
+                  <span style={{ width: 92 }}>{p.name}</span>
+                  <div className="bar-cell grow" style={{ minWidth: 0 }}><div style={{ width: `${p.value}%`, background: p.value >= 66 ? 'var(--pos)' : p.value >= 33 ? 'var(--warn)' : 'var(--neg)' }} /></div>
+                  <span className="num" style={{ width: 24, textAlign: 'right' }}>{Math.round(p.value)}</span>
                 </div>
-                <div className="row between faint" style={{ fontSize: 11, marginTop: 4 }}><span>0</span><span>50</span><span>100</span></div>
+              ))}
+            </span>
+          </span>
+        </span>}>
+          <ScoreRadar parts={s.score.parts} height={210} />
+          <div className="row" style={{ gap: 14, marginTop: 6 }}>
+            <div><div className="stat-label">Your score</div><b className="num" style={{ fontSize: 22 }}>{Math.round(s.score.total)}</b></div>
+            <div className="grow">
+              <div className="progress" style={{ background: 'linear-gradient(90deg, var(--neg), var(--warn), var(--pos))', position: 'relative', overflow: 'visible' }}>
+                <span style={{ position: 'absolute', left: `calc(${s.score.total}% - 6px)`, top: -3, width: 12, height: 12, borderRadius: '50%', background: 'var(--panel)', border: '3px solid var(--text)' }} />
               </div>
+              <div className="row between faint" style={{ fontSize: 11, marginTop: 4 }}><span>0</span><span>50</span><span>100</span></div>
             </div>
           </div>
         </Card>
-        <Card title="Daily net cumulative P&L" right={<button className="btn ghost sm" onClick={() => nav.go('reports')}>Reports</button>}><EquityChart data={s.equity} start={start} height={270} /></Card>
-        <Card title="Net daily P&L" right={<button className="btn ghost sm" onClick={() => nav.go('journal')}>Daily journal</button>}><PnlBars data={s.days.slice(-40).map((d) => ({ label: d.date, value: d.net, count: d.count }))} labelFmt={shortDate} height={270} /></Card>
+        <Card title="Daily net cumulative P&L"><EquityChart data={s.equity} start={start} height={270} /></Card>
+        <Card title="Net daily P&L"><PnlBars data={s.days.slice(-40).map((d) => ({ label: d.date, value: d.net, count: d.count }))} labelFmt={shortDate} height={270} /></Card>
       </div>
 
       <div className="grid g12">
@@ -258,7 +186,6 @@ export default function Dashboard() {
           </Card>
         )
       })}
-      {detail && <DetailModal kind={detail} s={s} trades={trades} onClose={() => setDetail(null)} />}
     </>
   )
 }

@@ -35,21 +35,13 @@ export function EquityChart({ data, height = 260, start }: { data: EquityPoint[]
   const color = up ? 'var(--pos)' : 'var(--neg)'
   const rel = full.map((d) => d.equity - start)
   const ticks = niceTicks(Math.min(0, ...rel), Math.max(0, ...rel)).map((t) => t + start)
-  const hi = Math.max(...rel), lo = Math.min(...rel)
-  const zero = hi <= 0 ? 0 : lo >= 0 ? 1 : hi / (hi - lo) // where the starting line falls between the top and bottom of the curve
   return (
     <ResponsiveContainer width="100%" height={height}>
       <AreaChart data={full} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
         <defs>
-          {/* Green above the starting line, red below it. */}
-          <linearGradient id="eqLine" x1="0" y1="0" x2="0" y2="1">
-            <stop offset={zero} stopColor="var(--pos)" /><stop offset={zero} stopColor="var(--neg)" />
-          </linearGradient>
           <linearGradient id="eq" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stopColor="var(--pos)" stopOpacity={0.3} />
-            <stop offset={zero} stopColor="var(--pos)" stopOpacity={0.04} />
-            <stop offset={zero} stopColor="var(--neg)" stopOpacity={0.04} />
-            <stop offset="1" stopColor="var(--neg)" stopOpacity={0.3} />
+            <stop offset="0%" stopColor={color} stopOpacity={0.3} />
+            <stop offset="100%" stopColor={color} stopOpacity={0} />
           </linearGradient>
         </defs>
         {grid}
@@ -61,8 +53,8 @@ export function EquityChart({ data, height = 260, start }: { data: EquityPoint[]
           <div>Cumulative P&L: <b className={`num ${p.equity >= start ? 'pos' : 'neg'}`}>{money(p.equity - start)}</b></div>
           <div>That day: <b className={`num ${p.pnl >= 0 ? 'pos' : 'neg'}`}>{money(p.pnl)}</b></div>
         </> : <div className="muted">Start</div>)} />} />
-        <Area animationDuration={450} type="linear" dataKey="equity" stroke="url(#eqLine)" strokeWidth={2.5} fill="url(#eq)" baseValue={start}
-          dot={full.length <= 31 ? { r: 3, fill: 'var(--panel)', stroke: color, strokeWidth: 2 } : false} activeDot={{ r: 5, fill: color, stroke: 'var(--panel)', strokeWidth: 2 }} />
+        <Area animationDuration={600} type="monotone" dataKey="equity" stroke={color} strokeWidth={2.5} fill="url(#eq)"
+          dot={false} activeDot={{ r: 5, fill: color, stroke: 'var(--panel)', strokeWidth: 2 }} />
       </AreaChart>
     </ResponsiveContainer>
   )

@@ -31,31 +31,19 @@ function Ring({ share }: { share: number }) {
   )
 }
 
-const row = (label: string, value: React.ReactNode) => <div className="kv"><span>{label}</span><span className="num">{value}</span></div>
-
-/** A stat tile. Hovering (or tapping) it reveals a small card with what the number is made of. */
-function Tile({ label, value, tone, right, children, about, details, alignRight }: {
-  label: string; value: React.ReactNode; tone?: number; right?: React.ReactNode; children?: React.ReactNode
-  about: string; details: React.ReactNode; alignRight?: boolean
-}) {
-  return (
-    <div className="card tile" tabIndex={0}>
-      <div className="row between">
-        <div>
-          <div className="stat-label">{label}</div>
-          <div className={cls('stat-value num', tone !== undefined && (tone > 0 ? 'pos' : tone < 0 ? 'neg' : ''))}>{value}</div>
-        </div>
-        {right}
+const Tile = ({ label, value, tone, right, children }: { label: string; value: React.ReactNode; tone?: number; right?: React.ReactNode; children?: React.ReactNode }) => (
+  <div className="card">
+    <div className="row between">
+      <div>
+        <div className="stat-label">{label}</div>
+        <div className={cls('stat-value num', tone !== undefined && (tone > 0 ? 'pos' : tone < 0 ? 'neg' : ''))}>{value}</div>
       </div>
-      {children}
-      <div className={cls('hover-card', alignRight && 'right')}>
-        <div className="hc-title">{label}</div>
-        <div className="hc-sub">{about}</div>
-        {details}
-      </div>
+      {right}
     </div>
-  )
-}
+    {children}
+  </div>
+)
+const grade = (v: number): [string, string] => (v >= 80 ? ['Excellent', 'pos'] : v >= 65 ? ['Good', 'pos'] : v >= 45 ? ['Fair', 'warn'] : ['Needs work', 'neg'])
 
 export default function Dashboard() {
   const trades = useFilteredTrades()
@@ -89,52 +77,29 @@ export default function Dashboard() {
   return (
     <>
       <div className="grid g5">
-        <Tile label="Net P&L" value={money(s.net)} tone={s.net} about="What you kept after commissions and fees."
-          details={<>{row('Gross P&L', <Money v={s.gross} />)}{row('Fees', <Money v={-s.fees} plain />)}{row('Net P&L', <b><Money v={s.net} /></b>)}{row('Average per trade', <Money v={s.expectancy} />)}</>}>
-          <div className="stat-sub">{s.count} trades</div>
-        </Tile>
-        <Tile label="Trade win %" value={pct(s.winRate)} right={<Gauge wins={s.wins} losses={s.losses} />} about="Winning trades out of all trades that ended in a win or a loss."
-          details={<>{row('Winners', <span className="pos">{s.wins}</span>)}{row('Losers', <span className="neg">{s.losses}</span>)}{s.be > 0 && row('Breakeven', s.be)}{row('Win rate', `${s.wins} of ${s.wins + s.losses}`)}</>} />
-        <Tile label="Profit factor" value={num(s.profitFactor)} right={<Ring share={s.grossProfit / (s.grossProfit + s.grossLoss || 1)} />} about="Dollars won for every dollar lost. Above 1.0 is profitable; 2.0 or more is strong."
-          details={<>{row('Total won', <Money v={s.grossProfit} />)}{row('Total lost', <Money v={-s.grossLoss} />)}{row('Won ÷ lost', <b>{num(s.profitFactor)}</b>)}</>} />
-        <Tile alignRight label="Day win %" value={pct(s.dayWinRate)} right={<Gauge wins={s.winDays} losses={s.lossDays} />} about="Trading days that ended green."
-          details={<>{row('Winning days', <span className="pos">{s.winDays}</span>)}{row('Losing days', <span className="neg">{s.lossDays}</span>)}{row('Avg winning day', <Money v={s.avgWinDay} />)}{row('Avg losing day', <Money v={s.avgLossDay} />)}</>} />
-        <Tile alignRight label="Avg win/loss trade" value={num(s.payoff)} about="Your average winner compared with your average loser."
-          details={<>{row('Average winner', <Money v={s.avgWin} />)}{row('Average loser', <Money v={-s.avgLoss} />)}{row('Win rate needed to break even', isFinite(s.payoff) && s.payoff > 0 ? pct(100 / (1 + s.payoff)) : '—')}{row('Your win rate', pct(s.winRate))}</>}>
+        <Tile label="Net P&L" value={money(s.net)} tone={s.net}><div className="stat-sub">{s.count} trades · {money(s.fees, 0)} fees</div></Tile>
+        <Tile label="Trade win %" value={pct(s.winRate)} right={<Gauge wins={s.wins} losses={s.losses} />} />
+        <Tile label="Profit factor" value={num(s.profitFactor)} right={<Ring share={s.grossProfit / (s.grossProfit + s.grossLoss || 1)} />} />
+        <Tile label="Day win %" value={pct(s.dayWinRate)} right={<Gauge wins={s.winDays} losses={s.lossDays} />} />
+        <Tile label="Avg win/loss trade" value={num(s.payoff)}>
           <div className="progress" style={{ marginTop: 10, background: 'var(--neg)' }}><div style={{ width: `${(s.avgWin / (s.avgWin + s.avgLoss || 1)) * 100}%`, background: 'var(--pos)', borderRadius: 0 }} /></div>
           <div className="row between num" style={{ fontSize: 12, fontWeight: 600, marginTop: 4 }}><span className="pos">{money(s.avgWin, 0)}</span><span className="neg">-{money(s.avgLoss, 0)}</span></div>
         </Tile>
       </div>
 
       <div className="grid g3">
-        <Card title={<span className="row" style={{ gap: 8 }}>Journal score
-          <span className="hover-host"><span className="info-dot">i</span>
-            <span className="hover-card" style={{ width: 290, fontWeight: 400 }}>
-              <div className="hc-title">How the score is built</div>
-              <div className="hc-sub">Six parts, each scored 0–100. Hover a point on the chart to see one part.</div>
-              {s.score.parts.map((p) => (
-                <div key={p.name} className="row" style={{ gap: 8, padding: '4px 0' }}>
-                  <span style={{ width: 92 }}>{p.name}</span>
-                  <div className="bar-cell grow" style={{ minWidth: 0 }}><div style={{ width: `${p.value}%`, background: p.value >= 66 ? 'var(--pos)' : p.value >= 33 ? 'var(--warn)' : 'var(--neg)' }} /></div>
-                  <span className="num" style={{ width: 24, textAlign: 'right' }}>{Math.round(p.value)}</span>
-                </div>
-              ))}
-            </span>
-          </span>
-        </span>}>
-          <ScoreRadar parts={s.score.parts} height={210} />
-          <div className="row" style={{ gap: 14, marginTop: 6 }}>
-            <div><div className="stat-label">Your score</div><b className="num" style={{ fontSize: 22 }}>{Math.round(s.score.total)}</b></div>
+        <Card title="Journal score" right={<span className={cls('chip', grade(s.score.total)[1])} style={{ fontWeight: 600 }}>{grade(s.score.total)[0]}</span>}>
+          <ScoreRadar parts={s.score.parts} height={236} />
+          <div className="score-foot">
+            <div><div className="stat-label">Your score</div><div className="num score-num">{Math.round(s.score.total)}</div></div>
             <div className="grow">
-              <div className="progress" style={{ background: 'linear-gradient(90deg, var(--neg), var(--warn), var(--pos))', position: 'relative', overflow: 'visible' }}>
-                <span style={{ position: 'absolute', left: `calc(${s.score.total}% - 6px)`, top: -3, width: 12, height: 12, borderRadius: '50%', background: 'var(--panel)', border: '3px solid var(--text)' }} />
-              </div>
-              <div className="row between faint" style={{ fontSize: 11, marginTop: 4 }}><span>0</span><span>50</span><span>100</span></div>
+              <div className="score-bar"><span style={{ left: `${s.score.total}%` }} /></div>
+              <div className="row between faint num" style={{ fontSize: 11, marginTop: 6 }}><span>0</span><span>20</span><span>40</span><span>60</span><span>80</span><span>100</span></div>
             </div>
           </div>
         </Card>
-        <Card title="Daily net cumulative P&L"><EquityChart data={s.equity} start={start} height={270} /></Card>
-        <Card title="Net daily P&L"><PnlBars data={s.days.slice(-40).map((d) => ({ label: d.date, value: d.net, count: d.count }))} labelFmt={shortDate} height={270} /></Card>
+        <Card title="Daily net cumulative P&L" right={<span className={cls('num', s.net >= 0 ? 'pos' : 'neg')} style={{ fontWeight: 700 }}>{money(s.net)}</span>}><EquityChart data={s.equity} start={start} height={290} /></Card>
+        <Card title="Net daily P&L" right={<span className="muted">{s.winDays} green · {s.lossDays} red</span>}><PnlBars data={s.days.slice(-40).map((d) => ({ label: d.date, value: d.net, count: d.count }))} labelFmt={shortDate} height={290} /></Card>
       </div>
 
       <div className="grid g12">

@@ -171,17 +171,9 @@ table.t { width: 100%; border-collapse: collapse; }
 .fold > div { padding: 0 18px 16px; }
 .fold .card { border: 0; padding: 0; box-shadow: none; }
 
-/* dashboard tiles: a small card fades in under the tile on hover (or tap / keyboard focus) */
-.tile { position: relative; transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s; outline: none; }
-.tile:hover, .tile:focus-within { border-color: rgba(91, 79, 245, 0.45); box-shadow: 0 6px 20px rgba(60, 50, 160, 0.1); transform: translateY(-1px); }
-.hover-card { position: absolute; top: calc(100% + 8px); left: 0; z-index: 25; width: 270px; background: var(--panel); border: 1px solid var(--line2); border-radius: 12px; box-shadow: var(--shadow); padding: 12px 14px; font-size: 12.5px;
-  opacity: 0; transform: translateY(6px) scale(0.98); transform-origin: top left; pointer-events: none; transition: opacity 0.16s ease, transform 0.16s ease; }
-.hover-card.right { left: auto; right: 0; transform-origin: top right; }
-.tile:hover .hover-card, .tile:focus-within .hover-card, .hover-host:hover .hover-card { opacity: 1; transform: none; pointer-events: auto; }
-.hover-card::before { content: ''; position: absolute; top: -6px; left: 26px; width: 10px; height: 10px; background: var(--panel); border-left: 1px solid var(--line2); border-top: 1px solid var(--line2); transform: rotate(45deg); }
-.hover-card.right::before { left: auto; right: 26px; }
-.hover-card .hc-title { font-weight: 600; font-size: 13px; margin-bottom: 2px; }
-.hover-card .hc-sub { color: var(--muted); line-height: 1.45; margin-bottom: 8px; }
-.hover-card .kv { padding: 6px 0; }
-.hover-host { position: relative; display: inline-flex; }
-.info-dot { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--line2); color: var(--muted); font-size: 10.5px; font-weight: 600; display: inline-grid; place-items: center; cursor: default; }
+/* journal score footer */
+.score-foot { display: flex; align-items: center; gap: 18px; margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--line); }
+.score-num { font-size: 30px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
+.score-bar { position: relative; height: 8px; border-radius: 999px; background: linear-gradient(90deg, #ef4a5f 0%, #f2a100 45%, #1eb980 100%); }
+.score-bar > span { position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%; background: var(--panel); border: 4px solid var(--text); transform: translate(-50%, -50%); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25); }
+.chip.warn { background: rgba(242, 161, 0, 0.14); border-color: transparent; color: #b97a00; }

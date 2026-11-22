@@ -25,7 +25,7 @@ const NAV: [Page, string, string][] = [
   ['dashboard', 'Dashboard', 'dashboard'], ['journal', 'Daily Journal', 'book'], ['trades', 'Trades', 'list'], ['calendar', 'Calendar', 'calendar'],
 ]
 const NAV_A: [Page, string, string][] = [['reports', 'Reports', 'chart'], ['coach', 'Assistant', 'spark'], ['playbooks', 'Playbooks', 'target'], ['forecast', 'Forecast', 'future'], ['market', 'Markets', 'globe']]
-const NAV2: [Page, string, string][] = [['import', 'Import & Sync', 'upload'], ['settings', 'Settings', 'settings']]
+const NAV2: [Page, string, string][] = [['import', 'Import', 'upload'], ['settings', 'Settings', 'settings']]
 const TABS: [Page, string, string][] = [['dashboard', 'Home', 'dashboard'], ['trades', 'Trades', 'list'], ['calendar', 'Calendar', 'calendar'], ['coach', 'Assistant', 'spark'], ['reports', 'Reports', 'chart']]
 const SUBS: Partial<Record<Page, string>> = {
   dashboard: 'Your performance at a glance', journal: 'Plan, review and reflect on each day', trades: 'Every trade, fees included', calendar: 'Day-by-day results',

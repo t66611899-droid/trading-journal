@@ -7,7 +7,6 @@ import { cls, dateTime, px } from '../lib/format'
 import { rootSymbol } from '../lib/instruments'
 import { setFeeRate, withFeeRates } from '../lib/fees'
 import { useNav } from '../nav'
-import TradovateSync from '../components/TradovateSync'
 
 const FIELDS: Record<Parsed['mode'], F[]> = {
   trades: ['symbol', 'side', 'qty', 'entryTime', 'exitTime', 'entryPrice', 'exitPrice', 'pnl', 'fees', 'swap', 'stopLoss', 'takeProfit', 'mae', 'mfe', 'notes'],
@@ -156,10 +155,6 @@ export default function ImportPage() {
             <div style={{ marginTop: 10 }}>
               {GUIDES.map(([name, text]) => <div key={name} className="kv" style={{ justifyContent: 'flex-start' }}><span style={{ width: 150, flex: 'none', color: 'var(--text)', fontWeight: 600 }}>{name}</span><span style={{ fontWeight: 400 }} className="muted">{text}</span></div>)}
             </div>
-          </details>
-          <details className="card fold">
-            <summary>Connect Tradovate for automatic sync</summary>
-            <div style={{ marginTop: 14 }}><TradovateSync onDone={() => nav.go('trades')} /></div>
           </details>
           <details className="card fold">
             <summary>Export &amp; backup</summary>

@@ -19,6 +19,8 @@ export function outcome(t: Trade): Outcome {
 export interface DayStat { date: string; net: number; count: number; wins: number; losses: number; trades: Trade[] }
 export interface EquityPoint { date: string; equity: number; pnl: number; dd: number }
 
+export interface ScorePart { name: string; value: number; weight: number; raw: string; how: string }
+
 export interface Stats {
   count: number; wins: number; losses: number; be: number
   net: number; gross: number; fees: number; grossProfit: number; grossLoss: number
@@ -27,12 +29,14 @@ export interface Stats {
   avgHold: number; avgHoldWin: number; avgHoldLoss: number
   maxConsecWins: number; maxConsecLosses: number; currentStreak: number
   maxDrawdown: number; maxDrawdownPct: number; recoveryFactor: number
+  /** Highest balance reached (after any closed trade) and how far the balance is below it right now. */
+  peakBalance: number; currentDrawdown: number
   avgR: number; rCount: number
   tradingDays: number; winDays: number; lossDays: number; dayWinRate: number
   avgDaily: number; avgWinDay: number; avgLossDay: number; bestDay: DayStat | null; worstDay: DayStat | null
   avgTradesPerDay: number; avgMonthly: number; avgYearly: number; sharpe: number; dailyStd: number
   days: DayStat[]; equity: EquityPoint[]
-  score: { total: number; parts: { name: string; value: number }[] }
+  score: { total: number; parts: ScorePart[] }
 }
 
 export function dailyStats(trades: Trade[]): DayStat[] {
@@ -84,6 +88,10 @@ export function computeStats(trades: Trade[], startBalance = 0): Stats {
     if (dd > maxDD) { maxDD = dd; maxDDPct = peak > 0 ? (dd / peak) * 100 : 0 }
     equity.push({ date: d.date, equity: eq, pnl: d.net, dd: -dd })
   }
+  // Trailing view, trade by trade: the peak is the highest balance after any closed trade.
+  let bal = startBalance, peakBalance = startBalance
+  for (const n of nets) { bal += n; peakBalance = Math.max(peakBalance, bal) }
+  const currentDrawdown = Math.max(0, peakBalance - bal)
   const dayNets = days.map((d) => d.net)
   const winDays = days.filter((d) => d.net > 0)
   const lossDays = days.filter((d) => d.net < 0)
@@ -100,16 +108,17 @@ export function computeStats(trades: Trade[], startBalance = 0): Stats {
   const bestDayNet = Math.max(0, ...dayNets)
   const consistency = totalNet > 0 && bestDayNet > 0 ? clamp((1 - bestDayNet / Math.max(totalNet, bestDayNet)) * 125) : 0
 
-  const parts = [
-    { name: 'Win %', value: clamp((winRate / 60) * 100) },
-    { name: 'Profit factor', value: clamp(((Math.min(profitFactor, 2.6) - 1) / 1.6) * 100) },
-    { name: 'Avg win/loss', value: clamp(((Math.min(payoff, 2.4) - 0.2) / 2.2) * 100) },
-    { name: 'Recovery', value: clamp((Math.min(recoveryFactor, 3.5) / 3.5) * 100) },
-    { name: 'Max drawdown', value: startBalance > 0 ? clamp(100 - maxDDPct * 10) : clamp(100 - (totalNet > 0 ? (maxDD / totalNet) * 100 : 100)) },
-    { name: 'Consistency', value: consistency },
+  const f2 = (n: number) => (isFinite(n) ? n.toFixed(2) : '∞')
+  const ddScore = startBalance > 0 ? clamp(100 - maxDDPct * 10) : clamp(100 - (totalNet > 0 ? (maxDD / totalNet) * 100 : 100))
+  const parts: ScorePart[] = [
+    { name: 'Win %', weight: 0.15, value: clamp((winRate / 60) * 100), raw: `${winRate.toFixed(1)}%`, how: 'Share of winning trades. 60% or more scores 100.' },
+    { name: 'Profit factor', weight: 0.25, value: clamp(((Math.min(profitFactor, 2.6) - 1) / 1.6) * 100), raw: f2(profitFactor), how: 'Total won ÷ total lost. 1.0 scores 0; 2.6 or more scores 100.' },
+    { name: 'Avg win/loss', weight: 0.2, value: clamp(((Math.min(payoff, 2.4) - 0.2) / 2.2) * 100), raw: f2(payoff), how: 'Average winner ÷ average loser. 2.4 or more scores 100.' },
+    { name: 'Recovery', weight: 0.1, value: clamp((Math.min(recoveryFactor, 3.5) / 3.5) * 100), raw: f2(recoveryFactor), how: 'Net profit ÷ largest drawdown. 3.5 or more scores 100.' },
+    { name: 'Max drawdown', weight: 0.2, value: ddScore, raw: startBalance > 0 ? `${maxDDPct.toFixed(2)}% of balance` : f2(maxDD), how: 'Largest drop from a peak. 0% scores 100; a 10% drop scores 0.' },
+    { name: 'Consistency', weight: 0.1, value: consistency, raw: totalNet > 0 && bestDayNet > 0 ? `best day = ${((bestDayNet / Math.max(totalNet, bestDayNet)) * 100).toFixed(0)}% of profit` : '—', how: 'How little one big day dominates your profit. Best day at 20% of profit or less scores 100.' },
   ]
-  const weights = [0.15, 0.25, 0.2, 0.1, 0.2, 0.1]
-  const total = count ? sum(parts.map((p, i) => p.value * weights[i])) : 0
+  const total = count ? sum(parts.map((p) => p.value * p.weight)) : 0
 
   return {
     count, wins: winsArr.length, losses: lossArr.length, be: count - decided,
@@ -120,7 +129,7 @@ export function computeStats(trades: Trade[], startBalance = 0): Stats {
     avgHoldWin: avg(sorted.filter((_, i) => outs[i] === 'win').map(holdMin)),
     avgHoldLoss: avg(sorted.filter((_, i) => outs[i] === 'loss').map(holdMin)),
     maxConsecWins: mcw, maxConsecLosses: mcl, currentStreak: cw || -cl,
-    maxDrawdown: maxDD, maxDrawdownPct: maxDDPct, recoveryFactor,
+    maxDrawdown: maxDD, maxDrawdownPct: maxDDPct, recoveryFactor, peakBalance, currentDrawdown,
     avgR: avg(rs), rCount: rs.length,
     tradingDays: days.length, winDays: winDays.length, lossDays: lossDays.length, dayWinRate,
     avgDaily, avgWinDay: avg(winDays.map((d) => d.net)), avgLossDay: avg(lossDays.map((d) => d.net)),

@@ -166,11 +166,13 @@ function rulesReport(c: Ctx): Report {
       else points.push({ tone: 'pos', text: L(`${a.name}: לא היה יום הפסדי אחד מול מגבלה של ${m0(a.maxDailyLoss)}.`, `${a.name}: not a single losing day against a ${m0(a.maxDailyLoss)} limit.`) })
     }
     if (a.maxDrawdown) {
-      const used = (s.maxDrawdown / a.maxDrawdown) * 100
+      // Trailing rule: what matters is how far the balance is below its peak right now.
+      const used = (s.currentDrawdown / a.maxDrawdown) * 100
+      const floor = s.peakBalance - a.maxDrawdown
       points.push({ tone: used >= 100 ? 'neg' : used >= 60 ? 'warn' : 'pos', text: L(
-        `${a.name}: הדרואודאון המרבי עד עכשיו הוא ${m0(s.maxDrawdown)} מתוך ${m0(a.maxDrawdown)} מותרים (${used.toFixed(0)}%).`,
-        `${a.name}: max drawdown so far is ${m0(s.maxDrawdown)} of ${m0(a.maxDrawdown)} allowed (${used.toFixed(0)}%).`) })
-      if (used >= 60) actions.push(L('הקטן את גודל הפוזיציה עד שתתרחק מהדרואודאון המרבי.', 'Trade smaller size until you have room again from the max drawdown.'))
+        `${a.name}: אתה ${m0(s.currentDrawdown)} מתחת לשיא (${m0(s.peakBalance)}), מתוך ${m0(a.maxDrawdown)} מותרים. רצפת החשבון כרגע: ${m0(floor)}. הירידה הגדולה ביותר בדרך הייתה ${m0(s.maxDrawdown)}.`,
+        `${a.name}: you are ${m0(s.currentDrawdown)} below your peak (${m0(s.peakBalance)}), of ${m0(a.maxDrawdown)} allowed. The account floor is now ${m0(floor)}. The deepest dip along the way was ${m0(s.maxDrawdown)}.`) })
+      if (used >= 60) actions.push(L('הקטן את גודל הפוזיציה עד שתתרחק מרצפת החשבון.', 'Trade smaller size until you have room again above the account floor.'))
     }
     if (a.profitTarget) points.push({ tone: s.net >= a.profitTarget ? 'pos' : 'info', text: L(
       `${a.name}: ${m0(Math.max(0, s.net))} מתוך יעד רווח של ${m0(a.profitTarget)} (${Math.max(0, (s.net / a.profitTarget) * 100).toFixed(0)}%).`,

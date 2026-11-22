@@ -18,6 +18,7 @@ const ICONS: Record<string, string> = {
   moon: 'M21 12.8A9 9 0 1111.2 3a7 7 0 009.8 9.8z',
   left: 'M15 18l-6-6 6-6', right: 'M9 18l6-6-6-6', link: 'M10 13a5 5 0 007 0l3-3a5 5 0 00-7-7l-1 1M14 11a5 5 0 00-7 0l-3 3a5 5 0 007 7l1-1',
   image: 'M21 19V5a2 2 0 00-2-2H5a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2zM8.5 10a1.5 1.5 0 100-3 1.5 1.5 0 000 3zM21 15l-5-5L5 21',
+  send: 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z', menu: 'M4 6h16M4 12h16M4 18h16', bolt: 'M13 2L3 14h9l-1 8 10-12h-9l1-8z', wallet: 'M20 7H5a2 2 0 010-4h13v4M3 5v14a2 2 0 002 2h15V7M16 14h.01',
   download: 'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3',
 }
 export function Icon({ name, size = 18 }: { name: string; size?: number }) {

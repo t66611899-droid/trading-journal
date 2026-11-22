@@ -1,47 +1,40 @@
-import React, { useMemo, useState } from 'react'
-import { Card, Seg } from '../components/ui'
-import { coach, TOPICS, type Lang, type Topic } from '../lib/coach'
+import React, { useMemo } from 'react'
+import { Card } from '../components/ui'
+import { ChatView, sendToAssistant } from '../components/Assistant'
+import { coach } from '../lib/coach'
 import { useStore } from '../lib/store'
-import { cls } from '../lib/format'
-import { useNav } from '../nav'
+
+const ASK: [string, string][] = [
+  ['סיכום היום האחרון', 'סכם לי את היום האחרון'],
+  ['מה הכי עולה לי כסף', 'מה הכי עולה לי כסף?'],
+  ['הצעות לשיפור', 'תן לי הצעות לשיפור'],
+  ['מצב כללי החשבון', 'איך אני מול כללי החשבון?'],
+  ['רווח לפי שעה', 'באיזו שעה אני הכי טוב?'],
+  ['רווח לפי יום בשבוע', 'באיזה יום בשבוע אני הכי טוב?'],
+  ['מה אם 2 הפסדים = סוף יום', 'מה אם הייתי עוצר אחרי 2 הפסדים?'],
+  ['גודל פוזיציה', 'כמה חוזים MNQ לסיכון 200$ עם סטופ 20 נקודות?'],
+]
 
 export default function Coach() {
   const trades = useStore((s) => s.trades)
   const accounts = useStore((s) => s.accounts)
-  const nav = useNav()
-  const [lang, setLang] = useState<Lang>('he')
-  const [topic, setTopic] = useState<Topic>('day')
-  const report = useMemo(() => coach(topic, trades, accounts, lang), [topic, trades, accounts, lang])
-  const he = lang === 'he'
+  const leak = useMemo(() => coach('leak', trades, accounts, 'he'), [trades, accounts])
+  const next = useMemo(() => coach('next', trades, accounts, 'he'), [trades, accounts])
   return (
-    <>
-      <div className="page-head">
-        <div className="muted">Your built-in coach: it reads your trades, fees, notes and account rules and tells you what it sees. Free, private, and it runs on your device.</div>
-        <Seg value={lang} onChange={setLang} options={[['he', 'עברית'], ['en', 'English']]} />
-      </div>
-      <div className="row wrap" dir={he ? 'rtl' : 'ltr'}>
-        {TOPICS.map((t) => <button key={t.id} className={cls('btn', topic === t.id && 'primary')} onClick={() => setTopic(t.id)}>{he ? t.he : t.en}</button>)}
-      </div>
-      {!report ? (
-        <Card><div className="empty"><h2 style={{ color: 'var(--text)' }}>Nothing to analyse yet</h2><p>Import your trades and the coach will have something to say.</p><button className="btn primary" onClick={() => nav.go('import')}>Import trades</button></div></Card>
-      ) : (
-        <Card>
-          <div dir={he ? 'rtl' : 'ltr'} className="col" style={{ gap: 14, fontSize: 14.5, lineHeight: 1.7 }}>
-            <h2 style={{ fontSize: 19 }}>{report.headline}</h2>
-            {report.points.map((p, i) => (
-              <div key={i} className="insight"><span className="dot" style={{ background: p.tone === 'info' ? 'var(--accent)' : `var(--${p.tone})`, marginTop: 9 }} /><span>{p.text}</span></div>
-            ))}
-            {report.actions.length > 0 && (
-              <div>
-                <div className="section-title" style={{ margin: '4px 0 8px' }}>{he ? 'מה לעשות' : 'What to do'}</div>
-                <ol style={{ margin: 0, paddingInlineStart: 22 }}>{report.actions.map((a) => <li key={a} style={{ marginBottom: 4 }}><b>{a}</b></li>)}</ol>
-              </div>
-            )}
-            {report.note && <div className="faint" style={{ fontSize: 13 }}>{report.note}</div>}
-          </div>
+    <div className="coach-page">
+      <div className="card chat-box"><ChatView /></div>
+      <div className="col" style={{ gap: 18 }}>
+        {next && next.actions.length > 0 && (
+          <Card title="Focus for next session">
+            <ol dir="rtl" style={{ margin: 0, paddingInlineStart: 20, lineHeight: 1.7 }}>{next.actions.map((a) => <li key={a}>{a}</li>)}</ol>
+          </Card>
+        )}
+        {leak && <Card title="Biggest leak"><div dir="rtl" style={{ lineHeight: 1.6 }}><b>{leak.headline}</b>{leak.points[0] && <div className="muted" style={{ marginTop: 6 }}>{leak.points[0].text}</div>}</div></Card>}
+        <Card title="Quick questions">
+          <div className="chips" dir="rtl">{ASK.map(([l, q]) => <button key={l} onClick={() => sendToAssistant(q)}>{l}</button>)}</div>
         </Card>
-      )}
-      <div className="faint" style={{ fontSize: 12.5 }}>The coach looks at your process — discipline, risk and habits. It does not predict the market or tell you what to buy or sell.</div>
-    </>
+        <div className="faint" style={{ fontSize: 12 }}>Runs on your device from your own trades — free and private. It looks at process, risk and habits; it does not predict the market.</div>
+      </div>
+    </div>
   )
 }

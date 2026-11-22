@@ -6,6 +6,7 @@ import { useFilteredTrades, useStartBalance, useStore } from '../lib/store'
 import { computeStats, dailyStats, net } from '../lib/stats'
 import { cls, dayKey, dayKeyOf, MONTHS, money, num, pct, shortDate } from '../lib/format'
 import { useNav } from '../nav'
+import { sendToAssistant } from '../components/Assistant'
 
 /** Half-donut: green share = wins, red share = losses. */
 function Gauge({ wins, losses }: { wins: number; losses: number }) {
@@ -74,9 +75,40 @@ export default function Dashboard() {
       </Card>
     )
 
+  const today = dayKeyOf(new Date())
+  const wk = (() => { const d = new Date(); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return dayKeyOf(d) })()
+  const mo = today.slice(0, 8) + '01'
+  const sumFrom = (from: string) => s.days.filter((d) => d.date >= from).reduce((a, d) => a + d.net, 0)
+  const todayNetAll = s.days.find((d) => d.date === today)?.net
+  const hour = new Date().getHours()
+  const hello = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening'
+  const tonePill = (v: number) => (v > 0 ? 'up' : v < 0 ? 'down' : '')
+  const last = s.days[s.days.length - 1]
+
   return (
     <>
-      <div className="grid g5">
+      <div className="hero">
+        <div className="row between wrap" style={{ alignItems: 'flex-start', gap: 20 }}>
+          <div>
+            <div className="hl">{hello} · Account balance</div>
+            <div className="big num">{money(start + s.net)}</div>
+            <div style={{ marginTop: 6, fontSize: 13, opacity: 0.85 }}><span className={tonePill(s.net)}>{s.net >= 0 ? '▲' : '▼'} {money(s.net)}</span> <span style={{ opacity: 0.7 }}>net · {pct(start ? (s.net / start) * 100 : 0, 2)} on {money(start, 0)}</span></div>
+          </div>
+          <div className="row wrap">
+            <button className="btn sm" onClick={() => { sendToAssistant('סכם לי את היום האחרון'); nav.go('coach') }}><Icon name="spark" size={15} />Review last day</button>
+            <button className="btn sm" onClick={() => nav.go('import')}><Icon name="upload" size={15} />Import</button>
+          </div>
+        </div>
+        <div className="pillrow" style={{ marginTop: 20 }}>
+          <div className="pill"><span className="hl">Today</span><b className={cls('num', todayNetAll !== undefined && tonePill(todayNetAll))}>{todayNetAll !== undefined ? money(todayNetAll) : 'No trades'}</b></div>
+          <div className="pill"><span className="hl">This week</span><b className={cls('num', tonePill(sumFrom(wk)))}>{money(sumFrom(wk))}</b></div>
+          <div className="pill"><span className="hl">This month</span><b className={cls('num', tonePill(sumFrom(mo)))}>{money(sumFrom(mo))}</b></div>
+          <div className="pill"><span className="hl">Last session</span><b className={cls('num', last && tonePill(last.net))}>{last ? `${money(last.net)}` : '—'}</b></div>
+          <div className="pill"><span className="hl">Streak</span><b className="num">{s.currentStreak > 0 ? `${s.currentStreak} win${s.currentStreak > 1 ? 's' : ''}` : s.currentStreak < 0 ? `${-s.currentStreak} loss${s.currentStreak < -1 ? 'es' : ''}` : '—'}</b></div>
+        </div>
+      </div>
+
+      <div className="grid g5 kpis">
         <Tile label="Net P&L" value={money(s.net)} tone={s.net}><div className="stat-sub">{s.count} trades · {money(s.fees, 0)} fees</div></Tile>
         <Tile label="Trade win %" value={pct(s.winRate)} right={<Gauge wins={s.wins} losses={s.losses} />} />
         <Tile label="Profit factor" value={num(s.profitFactor)} right={<Ring share={s.grossProfit / (s.grossProfit + s.grossLoss || 1)} />} />

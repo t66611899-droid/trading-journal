@@ -7,6 +7,7 @@ import { clearDemo, hasDemo, setFilters, setState, useStore, defaultFilters } fr
 import type { Filters, Trade } from './lib/types'
 import { cls } from './lib/format'
 import { cloudEnabled, useCloud } from './lib/cloud'
+import { AssistantFab } from './components/Assistant'
 import Dashboard from './pages/Dashboard'
 import CalendarPage from './pages/CalendarPage'
 import Trades from './pages/Trades'
@@ -22,10 +23,16 @@ import TradeEditor from './pages/TradeEditor'
 
 const NAV: [Page, string, string][] = [
   ['dashboard', 'Dashboard', 'dashboard'], ['journal', 'Daily Journal', 'book'], ['trades', 'Trades', 'list'], ['calendar', 'Calendar', 'calendar'],
-  ['reports', 'Reports', 'chart'], ['playbooks', 'Playbooks', 'target'], ['coach', 'Coach', 'spark'], ['forecast', 'Forecast', 'future'], ['market', 'Markets', 'globe'],
 ]
+const NAV_A: [Page, string, string][] = [['reports', 'Reports', 'chart'], ['coach', 'Assistant', 'spark'], ['playbooks', 'Playbooks', 'target'], ['forecast', 'Forecast', 'future'], ['market', 'Markets', 'globe']]
 const NAV2: [Page, string, string][] = [['import', 'Import & Sync', 'upload'], ['settings', 'Settings', 'settings']]
-const TITLES = Object.fromEntries([...NAV, ...NAV2].map(([p, l]) => [p, l])) as Record<Page, string>
+const TABS: [Page, string, string][] = [['dashboard', 'Home', 'dashboard'], ['trades', 'Trades', 'list'], ['calendar', 'Calendar', 'calendar'], ['coach', 'Assistant', 'spark'], ['reports', 'Reports', 'chart']]
+const SUBS: Partial<Record<Page, string>> = {
+  dashboard: 'Your performance at a glance', journal: 'Plan, review and reflect on each day', trades: 'Every trade, fees included', calendar: 'Day-by-day results',
+  reports: 'Deep dive into what works', coach: 'Ask anything about your trading', playbooks: 'Your setups and their rules', forecast: 'Where your current edge could lead',
+  market: 'Live charts and markets', import: 'Bring in trades from your broker', settings: 'Accounts, fees, sync and preferences',
+}
+const TITLES = Object.fromEntries([...NAV, ...NAV_A, ...NAV2].map(([p, l]) => [p, l])) as Record<Page, string>
 const RANGES: [Filters['range'], string][] = [['all', 'All time'], ['7d', 'Last 7 days'], ['30d', 'Last 30 days'], ['90d', 'Last 90 days'], ['month', 'This month'], ['ytd', 'This year'], ['custom', 'Custom range']]
 
 /** Date range + account stay visible; the less-used filters live in one popover. */
@@ -95,6 +102,7 @@ export default function App() {
   }, [])
   const [editing, setEditing] = useState<{ id: string | 'new'; defaults?: Partial<Trade> } | null>(null)
   const [day, setDay] = useState<string | null>(null)
+  const [more, setMore] = useState(false)
   const theme = useStore((s) => s.settings.theme)
   const demo = useStore(hasDemo)
   const cloud = useCloud()
@@ -114,26 +122,35 @@ export default function App() {
     <button key={p} className={cls('nav-item', page === p && 'active')} onClick={() => nav.go(p)}><Icon name={icon} />{label}</button>
   )
   const filtered = !['import', 'settings', 'market', 'playbooks', 'coach'].includes(page)
+  const syncCls = cloud.key ? (cloud.status === 'error' ? 'err' : cloud.status === 'syncing' ? 'busy' : 'on') : ''
   return (
     <NavCtx.Provider value={nav}>
       <div className="app">
         <aside className="sidebar">
-          <div className="brand"><div className="brand-mark"><Icon name="chart" size={17} /></div>Trading Journal</div>
+          <div className="brand"><div className="brand-mark"><Icon name="chart" size={18} /></div><div>Trading Journal<small>Personal edition</small></div></div>
           <button className="add-btn" onClick={() => nav.openTrade('new')}><Icon name="plus" size={16} />Add Trade</button>
+          <div className="nav-grp">Journal</div>
           {NAV.map(item)}
+          <div className="nav-grp">Analyze</div>
+          {NAV_A.map(item)}
           <div className="nav-sep" />
-          {NAV2.map(item)}
-          {cloudEnabled && <button className="nav-item" onClick={() => nav.go('settings')}><Icon name="link" />{cloud.key ? (cloud.status === 'syncing' ? 'Syncing…' : cloud.status === 'error' ? 'Sync problem' : 'Synced') : 'Sync devices'}</button>}
-          <button className="nav-item" onClick={toggleTheme}><Icon name={theme === 'dark' ? 'sun' : 'moon'} />{theme === 'dark' ? 'Light mode' : 'Dark mode'}</button>
+          <div className="side-foot">
+            {NAV2.map(item)}
+            {cloudEnabled && <button className="nav-item" onClick={() => nav.go('settings')}><span className={cls('sync-dot', syncCls)} />{cloud.key ? (cloud.status === 'syncing' ? 'Syncing…' : cloud.status === 'error' ? 'Sync problem' : 'Synced across devices') : 'Sync devices'}</button>}
+          </div>
         </aside>
         <div className="main">
           <div className="topbar">
-            <h1>{TITLES[page]}</h1>
+            <div><h1>{TITLES[page]}</h1><div className="sub">{SUBS[page]}</div></div>
             <div className="grow" />
-            {filtered && <FilterBar />}
+            <div className="filters">
+              {filtered && <FilterBar />}
+              <button className="btn ghost sm" onClick={toggleTheme} aria-label="Theme" title="Theme"><Icon name={theme === 'dark' ? 'sun' : 'moon'} size={16} /></button>
+              <button className="btn primary sm" onClick={() => nav.openTrade('new')}><Icon name="plus" size={15} />Trade</button>
+            </div>
           </div>
           <div className="content">
-            <div className="page">
+            <div className="page" key={page}>
               {demo && (
                 <div className="banner">
                   <span>You're viewing <b>sample data</b>. Import your own trades to get started.</span>
@@ -147,6 +164,18 @@ export default function App() {
             </div>
           </div>
         </div>
+        <nav className="tabbar">
+          {TABS.map(([p, l, i]) => <button key={p} className={cls(page === p && 'active')} onClick={() => nav.go(p)}><Icon name={i} size={19} />{l}</button>)}
+          <button className={cls(['journal', 'playbooks', 'forecast', 'market', 'import', 'settings'].includes(page) && 'active')} onClick={() => setMore(!more)}><Icon name="menu" size={19} />More</button>
+        </nav>
+        {more && (
+          <div className="overlay" onMouseDown={(e) => e.target === e.currentTarget && setMore(false)} style={{ alignItems: 'flex-end', padding: 10 }}>
+            <div className="modal" style={{ padding: 10, marginBottom: 76 }}>
+              {[...NAV, ...NAV_A, ...NAV2].filter(([p]) => !TABS.some(([t]) => t === p)).map(([p, l, i]) => <button key={p} className={cls('nav-item', page === p && 'active')} style={{ padding: '12px 12px' }} onClick={() => { setMore(false); nav.go(p) }}><Icon name={i} />{l}</button>)}
+            </div>
+          </div>
+        )}
+        {page !== 'coach' && <AssistantFab />}
         {editing && <TradeEditor id={editing.id} defaults={editing.defaults} onClose={() => setEditing(null)} />}
       </div>
     </NavCtx.Provider>
